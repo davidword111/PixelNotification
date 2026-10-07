@@ -33,6 +33,23 @@ app.get('/api/status', (req, res) => {
   res.json(statusData);
 });
 
+// Delete machine status
+app.delete('/api/status/:hostname', (req, res) => {
+  const { hostname } = req.params;
+
+  if (!hostname) {
+    return res.status(400).json({ success: false, error: 'hostname required' });
+  }
+
+  if (statusData[hostname]) {
+    delete statusData[hostname];
+    console.log(`[${new Date().toLocaleTimeString()}] Deleted: ${hostname}`);
+    return res.json({ success: true, message: 'Machine deleted' });
+  }
+
+  res.status(404).json({ success: false, error: 'Machine not found' });
+});
+
 // Web Dashboard
 app.get('/', (req, res) => {
   const machines = Object.entries(statusData).map(([hostname, data]) => ({
@@ -70,6 +87,7 @@ app.get('/', (req, res) => {
         <td>${statusBadge}</td>
         <td>${m.message || ''}</td>
         <td><span class="timestamp">${m.lastUpdate || ''}</span></td>
+        <td><button class="delete-btn" onclick="deleteMachine('${m.hostname}')">Delete</button></td>
       </tr>
     `;
   });
@@ -195,9 +213,39 @@ app.get('/', (req, res) => {
             color: #92400e;
         }
 
+        .delete-btn {
+            padding: 4px 8px;
+            font-size: 12px;
+            background: #ef4444;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .delete-btn:hover {
+            background: #dc2626;
+        }
+
         .timestamp {
             color: #999;
             font-size: 12px;
+        }
+
+        .delete-btn {
+            padding: 4px 8px;
+            font-size: 12px;
+            background: #ef4444;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .delete-btn:hover {
+            background: #dc2626;
         }
 
         .footer {
@@ -237,7 +285,8 @@ app.get('/', (req, res) => {
                     <th style="width: 25%">Hostname</th>
                     <th style="width: 15%">Status</th>
                     <th style="width: 40%">Message</th>
-                    <th style="width: 20%">Last Updated</th>
+                    <th style="width: 15%">Last Updated</th>
+                    <th style="width: 5%">Action</th>
                 </tr>
             </thead>
             <tbody>
@@ -249,6 +298,45 @@ app.get('/', (req, res) => {
             Auto-refresh every 5 seconds
         </div>
     </div>
+
+    <script>
+        function updateStats() {
+            const rows = document.querySelectorAll('tbody tr');
+            let running = 0, frozen = 0, loop = 0;
+
+            rows.forEach(row => {
+                const badge = row.querySelector('.status-badge');
+                const status = badge ? badge.textContent.trim() : '';
+                if (status === 'RUNNING') running++;
+                else if (status === 'FROZEN') frozen++;
+                else if (status === 'RESTART LOOP') loop++;
+            });
+
+            document.getElementById('running-count').textContent = running;
+            document.getElementById('frozen-count').textContent = frozen;
+            document.getElementById('loop-count').textContent = loop;
+        }
+
+        function deleteMachine(hostname) {
+            if (!confirm('Delete ' + hostname + '?')) return;
+
+            fetch('/api/status/' + hostname, {
+                method: 'DELETE'
+            })
+            .then(r => r.json())
+            .then(d => {
+                if (d.success) {
+                    alert('Deleted: ' + hostname);
+                    location.reload();
+                } else {
+                    alert('Error: ' + d.error);
+                }
+            })
+            .catch(e => alert('Error: ' + e));
+        }
+
+        updateStats();
+    </script>
 </body>
 </html>
   `;
