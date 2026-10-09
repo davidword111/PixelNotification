@@ -30,7 +30,25 @@ app.post('/api/update-status', (req, res) => {
 
 // Get all status
 app.get('/api/status', (req, res) => {
-  res.json(statusData);
+  const now = new Date();
+  const statusWithHealth = {};
+
+  Object.entries(statusData).forEach(([hostname, data]) => {
+    const lastUpdated = new Date(data.receivedAt);
+    const diffMinutes = (now - lastUpdated) / 1000 / 60;
+
+    let status = data.status;
+    if (diffMinutes > 5) {
+      status = 'Offline';
+    }
+
+    statusWithHealth[hostname] = {
+      ...data,
+      status
+    };
+  });
+
+  res.json(statusWithHealth);
 });
 
 // Delete machine status
@@ -52,18 +70,31 @@ app.delete('/api/status/:hostname', (req, res) => {
 
 // Web Dashboard
 app.get('/', (req, res) => {
-  const machines = Object.entries(statusData).map(([hostname, data]) => ({
-    hostname,
-    ...data
-  })).sort((a, b) => a.hostname.localeCompare(b.hostname));
+  const now = new Date();
+  const machines = Object.entries(statusData).map(([hostname, data]) => {
+    const lastUpdated = new Date(data.receivedAt);
+    const diffMinutes = (now - lastUpdated) / 1000 / 60;
+
+    let status = data.status;
+    if (diffMinutes > 5) {
+      status = 'Offline';
+    }
+
+    return {
+      hostname,
+      ...data,
+      status
+    };
+  }).sort((a, b) => a.hostname.localeCompare(b.hostname));
 
   const machineCount = machines.length;
-  let running = 0, frozen = 0, loop = 0;
+  let running = 0, frozen = 0, loop = 0, offline = 0;
 
   machines.forEach(m => {
     if (m.status === 'Running') running++;
     else if (m.status === 'Frozen') frozen++;
     else if (m.status === 'Restart Loop') loop++;
+    else if (m.status === 'Offline') offline++;
   });
 
   let tableRows = '';
@@ -79,6 +110,9 @@ app.get('/', (req, res) => {
     } else if (m.status === 'Restart Loop') {
       statusClass = 'status-warning';
       statusBadge = '<span class="status-badge warning">RESTART LOOP</span>';
+    } else if (m.status === 'Offline') {
+      statusClass = 'status-offline';
+      statusBadge = '<span class="status-badge" style="background:#e5e7eb;color:#374151">OFFLINE</span>';
     }
 
     tableRows += `
@@ -188,6 +222,7 @@ app.get('/', (req, res) => {
         .status-ok { border-left: 4px solid #22c55e; }
         .status-error { background: #fef2f2; border-left: 4px solid #ef4444; }
         .status-warning { background: #fffbeb; border-left: 4px solid #f59e0b; }
+        .status-offline { background: #f3f4f6; border-left: 4px solid #6b7280; }
 
         .status-badge {
             display: inline-block;
